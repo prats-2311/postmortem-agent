@@ -29,6 +29,21 @@ export function writeDraft(params: WriteDraftParams): PostmortemDraft {
     },
   ];
 
+  // One action item per contributing factor — gives the Linear publish step
+  // real content instead of an empty list. Derived from what RootCauseAnalyzer
+  // already produced rather than inventing new content.
+  const actionItems = params.rootCause.contributingFactors.map((factor) => `Address: ${factor}`);
+
+  // Total duration is the one metric computable from data we always have
+  // (first -> last timeline timestamp). Machine-signal-lag / human-detection-lag
+  // need labeled event types the pipeline doesn't tag yet — left for later.
+  const metrics: PostmortemDraft["metrics"] = {};
+  if (params.timeline.length >= 2) {
+    const first = new Date(params.timeline[0]!.timestamp).getTime();
+    const last = new Date(params.timeline[params.timeline.length - 1]!.timestamp).getTime();
+    metrics.totalDurationMinutes = Math.round((last - first) / 60000);
+  }
+
   return {
     incidentId: params.incidentId,
     title: `Incident ${params.incidentId} — ${params.rootCause.primaryCause.slice(0, 60)}`,
@@ -36,8 +51,8 @@ export function writeDraft(params: WriteDraftParams): PostmortemDraft {
     timeline: params.timeline,
     rootCause: params.rootCause,
     claims,
-    actionItems: [],
-    metrics: {},
+    actionItems,
+    metrics,
     status: "draft",
   };
 }

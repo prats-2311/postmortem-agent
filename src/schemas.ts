@@ -44,6 +44,25 @@ export const RootCauseSchema = z.object({
 });
 export type RootCause = z.infer<typeof RootCauseSchema>;
 
+/**
+ * LLM-facing twin, all fields required, no `.default()`.
+ *
+ * OpenAI/Groq structured-output "strict" mode requires every property to
+ * appear in the JSON schema's `required` array — a `.default()` field gets
+ * excluded from `required` when converted to JSON schema, which strict mode
+ * rejects outright (confirmed live against Groq's openai/gpt-oss-120b;
+ * Anthropic's tool-based structured output had no such constraint). Use
+ * this variant as the `schema` argument to `generateObject`; the inferred
+ * output type is structurally identical to RootCause since a `.default()`
+ * field's TS output type is already non-optional.
+ */
+export const RootCauseLLMSchema = z.object({
+  primaryCause: z.string().min(1),
+  contributingFactors: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+  citedArtifactIds: z.array(z.string()).min(1),
+});
+
 // ---------------------------------------------------------------------------
 // A single cited claim inside the draft — the unit the CitationVerifier checks.
 // ---------------------------------------------------------------------------
@@ -115,6 +134,58 @@ export const CriticVerdictSchema = z.object({
 });
 export type CriticVerdict = z.infer<typeof CriticVerdictSchema>;
 
+/**
+ * LLM-facing twin, all fields required, no `.default()`. Same rationale as
+ * RootCauseLLMSchema above — use as the `schema` argument to
+ * `generateObject`; keep CriticVerdictSchema (with its security-critical
+ * fail-closed defaults) for the `.parse()` calls in critic.ts that build a
+ * verdict from a partial object on the fail-closed paths.
+ */
+export const CriticVerdictLLMSchema = z.object({
+  approved: z.boolean(),
+  injectionDetected: z.boolean(),
+  injectionFields: z.array(z.string()),
+  requiresHumanReview: z.boolean(),
+  riskLevel: RiskLevelSchema,
+  reasoning: z.string(),
+  blockedContent: z.array(z.string()),
+});
+
+// ---------------------------------------------------------------------------
+// Hardening proposal — "what would have caught this earlier?"
+//
+// A concrete, runnable regression test proposed by pipeline/hardening.ts.
+// Deliberately NOT nested inside PostmortemDraft: the draft is the
+// narrative document (published to Notion); this is a separate code-change
+// proposal consumed only by publish/github-pr.ts. All fields required — no
+// `.default()` needed here, so no LLM-facing twin is required (unlike
+// RootCauseSchema / CriticVerdictSchema — see the Groq strict-mode note
+// above).
+// ---------------------------------------------------------------------------
+
+export const HardeningProposalSchema = z.object({
+  description: z.string().min(1), // what this test does and why it would have caught the incident
+  filePath: z.string().min(1), // e.g. "tests/test_policy_client_fail_closed.py"
+  fileContent: z.string().min(1), // real, runnable test code — not a description of one
+  prTitle: z.string().min(1),
+});
+export type HardeningProposal = z.infer<typeof HardeningProposalSchema>;
+
+// ---------------------------------------------------------------------------
+// Verification stats — the self-referential trust footer. Computed once in
+// orchestrator.ts from data that already exists (citationChecks + evidence),
+// not a new claim the agent makes about itself — a tally of checks already
+// performed.
+// ---------------------------------------------------------------------------
+
+export const VerificationStatsSchema = z.object({
+  totalClaimsChecked: z.number().int().min(0),
+  claimsVerified: z.number().int().min(0),
+  claimsCut: z.number().int().min(0),
+  evidenceQuarantined: z.number().int().min(0),
+});
+export type VerificationStats = z.infer<typeof VerificationStatsSchema>;
+
 // ---------------------------------------------------------------------------
 // Orchestration result
 // ---------------------------------------------------------------------------
@@ -125,5 +196,7 @@ export const OrchestrationResultSchema = z.object({
   verdict: CriticVerdictSchema,
   approved: z.boolean(),
   requiresHumanReview: z.boolean(),
+  hardeningProposal: HardeningProposalSchema.optional(),
+  verificationStats: VerificationStatsSchema,
 });
 export type OrchestrationResult = z.infer<typeof OrchestrationResultSchema>;

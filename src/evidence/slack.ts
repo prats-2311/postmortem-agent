@@ -15,9 +15,32 @@ interface SlackMessage {
   subtype?: string;
   user?: string;
   bot_id?: string;
+  /** Display-name override used for bot-posted messages (chat:write.customize). */
+  username?: string;
   text: string;
   ts: string;
 }
+
+/**
+ * Subtypes that represent administrative/system events, not conversational
+ * content — excluded from evidence. Deliberately NOT excluding
+ * "bot_message": a message posted via chat.postMessage (including with a
+ * `username` override, exactly how our own seeding script posts) carries
+ * subtype "bot_message" and IS real content. An earlier blanket
+ * `!subtype` filter silently dropped every bot-posted message, discovered
+ * via live testing against a real seeded channel — see notes/05.
+ */
+const SYSTEM_SUBTYPES = new Set([
+  "channel_join",
+  "channel_leave",
+  "channel_topic",
+  "channel_purpose",
+  "channel_name",
+  "channel_archive",
+  "channel_unarchive",
+  "pinned_item",
+  "unpinned_item",
+]);
 
 interface SlackHistoryResponse {
   ok: boolean;
@@ -146,16 +169,21 @@ export async function fetchSlackEvidence(params: FetchSlackEvidenceParams): Prom
   );
 
   const messages = (history.messages ?? []).filter(
-    (m) => m.type === "message" && !m.subtype && (m.text?.length ?? 0) > 0,
+    (m) => m.type === "message" && !SYSTEM_SUBTYPES.has(m.subtype ?? "") && (m.text?.length ?? 0) > 0,
   );
 
   const userLabelCache = new Map<string, string>();
   const evidence: Evidence[] = [];
 
   for (const msg of messages) {
-    const userLabel = msg.user
-      ? await resolveUserLabel(msg.user, token, userLabelCache)
-      : (msg.bot_id ? "bot" : "unknown");
+    // A `username` override (bot-posted, chat:write.customize) is the
+    // author's intended display name — prefer it over resolving `user`,
+    // which for such messages is often absent or points at the bot itself.
+    const userLabel = msg.username
+      ? msg.username
+      : msg.user
+        ? await resolveUserLabel(msg.user, token, userLabelCache)
+        : (msg.bot_id ? "bot" : "unknown");
 
     evidence.push(
       toEvidence({

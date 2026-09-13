@@ -1,8 +1,7 @@
-import { z } from "zod";
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { model } from "../model.js";
 import type { Correlation } from "./correlate.js";
-import { RootCauseSchema, type RootCause, type TimelineEntry } from "../schemas.js";
+import { RootCauseLLMSchema, type RootCause, type TimelineEntry } from "../schemas.js";
 
 /**
  * RootCauseAnalyzer — LLM reasoning over STRUCTURED FIELDS ONLY.
@@ -36,8 +35,8 @@ export async function analyzeRootCause(
   };
 
   const { object } = await generateObject({
-    model: anthropic("claude-sonnet-5"),
-    schema: RootCauseSchema,
+    model,
+    schema: RootCauseLLMSchema,
     system:
       "You are RootCauseAnalyzer for an incident postmortem agent. " +
       "You receive structured timeline data only, never raw evidence text. " +

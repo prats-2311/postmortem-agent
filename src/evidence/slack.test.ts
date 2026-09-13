@@ -165,6 +165,85 @@ describe("fetchSlackEvidence", () => {
     ).rejects.toThrow(/502/);
   });
 
+  it("includes bot-posted messages (subtype bot_message) and uses the username override directly, without calling users.info", async () => {
+    const usersInfoCalls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | string) => {
+        const url = new URL(input.toString());
+        if (url.pathname.endsWith("/conversations.history")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              messages: [
+                {
+                  type: "message",
+                  subtype: "bot_message",
+                  bot_id: "B0C1FGKT8TG",
+                  username: "dev-raj (oncall)",
+                  text: "resolving INC-142. postmortem owed.",
+                  ts: "1789324388.338429",
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        usersInfoCalls.push(url.searchParams.get("user") ?? "");
+        return new Response(JSON.stringify({ ok: true, user: {} }), { status: 200 });
+      }),
+    );
+
+    const evidence = await fetchSlackEvidence({
+      channelId: "C12345",
+      since: "2026-09-08T16:00:00.000Z",
+      until: "2026-09-08T17:00:00.000Z",
+      authToken: "xoxb-test",
+    });
+
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]!.raw).toBe("dev-raj (oncall): resolving INC-142. postmortem owed.");
+    expect(usersInfoCalls).toHaveLength(0);
+  });
+
+  it("still excludes true system subtypes (channel_join) while allowing bot_message through", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | string) => {
+        const url = new URL(input.toString());
+        if (url.pathname.endsWith("/conversations.history")) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              messages: [
+                { type: "message", subtype: "channel_join", user: "U1", text: "joined", ts: "1.0" },
+                {
+                  type: "message",
+                  subtype: "bot_message",
+                  username: "maya (support lead)",
+                  text: "real content",
+                  ts: "2.0",
+                },
+              ],
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, user: {} }), { status: 200 });
+      }),
+    );
+
+    const evidence = await fetchSlackEvidence({
+      channelId: "C12345",
+      since: "2026-09-08T16:00:00.000Z",
+      until: "2026-09-08T17:00:00.000Z",
+      authToken: "xoxb-test",
+    });
+
+    expect(evidence).toHaveLength(1);
+    expect(evidence[0]!.raw).toContain("real content");
+  });
+
   it("falls back to the raw user ID if a user lookup fails, without breaking collection", async () => {
     vi.stubGlobal(
       "fetch",

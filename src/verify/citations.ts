@@ -1,5 +1,5 @@
 import { generateObject } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { model } from "../model.js";
 import { z } from "zod";
 import type { Claim, CitationCheck, Evidence } from "../schemas.js";
 
@@ -47,7 +47,7 @@ async function checkSupport(
   artifact: Evidence,
 ): Promise<{ supported: boolean; reason: string }> {
   const { object } = await generateObject({
-    model: anthropic("claude-sonnet-5"),
+    model,
     schema: z.object({ supported: z.boolean(), reason: z.string() }),
     system:
       "You verify whether a cited piece of evidence actually supports a claim. " +

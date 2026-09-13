@@ -186,7 +186,9 @@ might not show; fixture-vs-live honesty ("the scenario is scripted; the agent's 
 
 - **Harness**: Vercel AI SDK (their blog: "lightweight, gets you from zero to working agent fast";
   first-class Lemma adapter `vercelAI()`) — or Claude Agent SDK if repo-analysis becomes central.
-- **Model**: Claude (claude-sonnet-5 for speed / claude-fable-5 for the hard reasoning steps).
+- **Model**: Groq (`openai/gpt-oss-120b`, via `@ai-sdk/groq`) — swapped from the original
+  Claude/Anthropic plan on 2026-09-14 (free Groq credits available). See "Model swap" section
+  below for the three real bugs found and fixed while making this change.
 - **Integrations**: prefer official APIs/MCP servers: Sentry API, Slack API (bot token), GitHub (octokit),
   Notion API, Linear API. Seed everything Saturday.
 - **Lemma setup before Sunday**: create org + project, copy project API key (shown once!), send one
@@ -228,6 +230,278 @@ Each evidence source: 30-min timebox behind an adapter interface; API fights →
 move on. Saturday: everything the rules allow (workspaces, keys, seeded data, ground truth,
 file-by-file spec ready to type from).
 
+### Publishers — "takes action" (judge priority, see live-tested findings below)
+
+- [x] All three publishers implemented ✅ 2026-09-14 — `publish/notion.ts`, `publish/linear.ts`,
+      `publish/slack-post.ts`. Each follows the same shape: real API call, then a **separate
+      postcondition read-back** call before returning `ok:true` (never trust a 200 alone — this is
+      the "skipped work" mitigation from the reliability brief, made real). 16 new tests (53 total)
+      covering create success + read-back, create failure, and postcondition failure per publisher.
+      Linear note: personal API keys go in `Authorization` directly, no `Bearer` prefix (verified
+      against their docs; tested explicitly).
+      **Slack-post is live-verified** ✅: posted a real tl;dr message to `#inc-142-demo` using the
+      already-working `chat:write`-scoped bot token, confirmed via read-back, got back a real
+      clickable Slack link (`https://slack.com/archives/C0C1B8FCELB/p...`). This is the first fully
+      real, end-to-end "the agent took an action in the world" moment — directly answers the
+      judges' "takes action" criterion.
+      **Notion is now live-verified** ✅ 2026-09-14: Personal Access Token (`ntn_...`), page
+      "Incident Postmortems" (`NOTION_PARENT_PAGE_ID=3dae5ef6beba8057b243e27fcb3029ab`). Note:
+      this newer Notion PAT type inherited workspace access automatically — the classic
+      "explicit per-page Connections" step wasn't actually required here (confirmed via a direct
+      API call before assuming). Ran the real `publishToNotion` with a full realistic INC-142
+      draft: **real page created, real clickable URL returned, postcondition read-back passed.**
+      **Linear is now live-verified too** ✅ 2026-09-14: personal API key, team "Random" (`RAN`)
+      resolved via a direct GraphQL query (`{ teams { nodes { id name key } } }`) rather than
+      hunting for it in Linear's UI. Ran the real `fileLinearTickets` with the two INC-142 action
+      items: **both tickets created for real (RAN-5, RAN-6), real clickable URLs, postcondition
+      read-back passed on both.**
+      **All 6 external systems now fully live-verified: Lemma, Sentry, GitHub, Slack, Notion,
+      Linear.** Every evidence fetcher and every publisher has made a real, successful, verified
+      call against a real account.
+
+### Model swap: Anthropic → Groq — three real bugs found before trusting it
+
+User has free Groq credits — swapped the two LLM call sites (RootCauseAnalyzer,
+Critic's semantic layer, plus citations.ts's support-check) from Anthropic to Groq. Centralized
+into one `src/model.ts` so it was a one-file change. Three real, distinct problems surfaced and
+fixed along the way — none discovered by luck, all by checking before trusting:
+
+1. **Wrong model ID guessed.** Nearly hardcoded `llama-3.3-70b-versatile` — queried
+   `GET https://api.groq.com/openai/v1/models` first and found it isn't even in this account's
+   list. Real available models: `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`,
+   `groq/compound`, plus audio/safety models. Picked `openai/gpt-oss-120b` — largest
+   general-purpose model, 131k context, built for structured output.
+2. **`ai` package was on a guessed, badly stale major version.** Original scaffolding pinned
+   `"ai": "^4.0.0"` without checking — same mistake as `@uselemma/tracing` earlier this session.
+   Real current major is **7.x** (`7.0.99`). `@ai-sdk/groq@4.0.41` implements a newer provider
+   interface (`LanguageModelV4`) than old `ai@4.3.19` understood (`LanguageModelV1`) — a real
+   `tsc` error, not a guess. Fixed: bumped to `ai@^7.0.99`; `zod` was already compatible
+   (`3.25.76`, satisfies both packages' peer range) so no zod change needed. `generateObject`'s
+   call shape was stable across the jump — no call-site rewrites needed beyond the version bump.
+3. **Groq/OpenAI strict structured-output mode requires every property in `required`.** A live
+   `generateObject` call failed with a real API error: Zod's `.default()` fields get excluded
+   from the generated JSON schema's `required` array, which Groq's strict mode rejects outright.
+   Anthropic's tool-based structured output never enforced this, so it was invisible until the
+   provider swap. This affected `RootCauseSchema` (1 defaulted field) and — much more seriously —
+   `CriticVerdictSchema`, where **every field is defaulted on purpose** (the fail-closed security
+   design from notes/07). Fixed correctly, not by stripping the defaults (which are
+   security-critical for the `.parse()` fail-closed paths in critic.ts): added `RootCauseLLMSchema`
+   and `CriticVerdictLLMSchema` twins in schemas.ts — same shape, no defaults, used only as the
+   `generateObject` schema argument. The original defaulted schemas stay untouched for internal
+   use. Documented inline so this doesn't get "simplified" back into one schema later.
+
+**Live-verified after all three fixes**: `analyzeRootCause` against the real INC-142 timeline
+correctly identified the root cause and cited all 4 real artifact IDs, zero fabrication.
+`Critic.review()` against a draft with an uncited claim correctly flagged it as "likely
+hallucinated" and refused approval with clear reasoning — real semantic reasoning working, not
+just the static layer. **Both LLM call sites in the pipeline are now live-verified on Groq.**
+
+## 🎉 FULL END-TO-END RUN — 2026-09-14, complete success
+
+Before this, `correlate.ts` still threw ("not implemented") and `report.ts` produced empty
+`actionItems`/`metrics` — both fixed first (heuristic temporal + cross-source-transition
+correlation; action items derived from contributingFactors; totalDurationMinutes computed from
+real timeline timestamps). Then ran the entire chain for real, no mocks, no fixtures substituted:
+
+```
+Evidence (real Sentry+Slack+GitHub) → timeline → correlate → root cause (Groq)
+  → report → citation verification (Groq) → Critic (Groq) → approve → publish (real writes)
+```
+
+**Result: complete success on every stage.**
+- Evidence: Sentry 0 (gracefully handled, nothing seeded there), Slack 14, GitHub 4 → 18 total.
+  **The SLK-107 injection plant was correctly quarantined at ingestion**, before reasoning.
+- Root cause: correctly identified (PR #1 slug rename → silent empty-fallback → agent
+  fabrication), confidence 0.95, **7 real artifact IDs cited, zero fabrication**.
+- 5 real, specific action items derived from contributing factors. `totalDurationMinutes: 43`.
+- Critic: `approved: true`, `riskLevel: none`, sound reasoning.
+- Publish: **real Notion page created, 5 real Linear tickets filed (RAN-7..RAN-11), real Slack
+  summary posted. `published: true, needsEscalation: false`, every write succeeded first attempt.**
+
+**One real deadlock bug found and fixed mid-run**: first attempt returned `approved: false`
+despite the Critic's own reasoning saying "no injection, no hallucination, risk modest." Root
+cause: the system prompt said "publishing always requires human review," and the LLM reasonably
+inferred `approved` should be `false` for that reason — but `requiresHumanReview` is *always*
+forced `true` in code regardless of the LLM's answer, and `approveAndPublish` (which **is** the
+human clicking approve) refused to run unless `approved` was already `true`. That's a genuine
+deadlock: nothing could ever be published, by design, permanently. Fixed by rewriting the system
+prompt to explicitly separate the two questions ("approved reflects content safety only;
+requiresHumanReview is always true regardless — do not set approved=false just because human
+review is coming"). Re-ran clean.
+
+**One known, non-blocking quality gap**: `draft.claims` ends up empty after citation
+verification — the single compound root-cause claim cites only its first artifact
+(`citedArtifactIds[0]`), but its text synthesizes facts from multiple sources, so the LLM
+support-checker correctly (rigorously) ruled it unsupported by that one citation and cut it.
+Notion's "Findings" section renders empty; root cause / timeline / action items / metrics are
+all fully populated regardless. Real fix needs either multi-artifact citations (schema change:
+`Claim.citedArtifactId` → array) or splitting root cause into atomic per-fact claims — scoped
+out for now, documented here rather than silently left broken.
+
+**This is the capstone validation**: every evidence source, both LLM reasoning stages, the
+Critic, the approval gate, and all three publishers have now each been proven live and the full
+chain proven live together. Nothing left in the core pipeline is unverified.
+
+## Hardening PR — the agent proposes an actual fix, not just recommendations ✅ 2026-09-14
+
+Promoted from "stretch goal" to built, given the judges' explicit "takes action" emphasis. New
+architecture, same gating discipline as everything else — **drafting is free, writing is gated
+behind approval**:
+
+- `schemas.ts`: `HardeningProposalSchema` (description, filePath, fileContent, prTitle) — all
+  fields required, no LLM-facing twin needed (nothing defaulted). Threaded through
+  `OrchestrationResult` as `hardeningProposal?`, deliberately NOT nested in `PostmortemDraft`
+  (separate code-change proposal, not part of the narrative document published to Notion).
+- `pipeline/hardening.ts`: `proposeHardening(rootCause, timeline)` — same isolation pattern as
+  RootCauseAnalyzer (structured fields only). Asks for ONE concrete, runnable pytest regression
+  test asserting the SPECIFIC failure behavior from the root cause — not a description of a test.
+  Runs during `runPostmortem`, wrapped so a failure here degrades gracefully (logged, proposal
+  omitted) rather than breaking report generation — this stage is a bonus, not core.
+- `publish/github-pr.ts`: `openHardeningPR(proposal, incidentId)` — branch off current default
+  tip, write the file via Contents API, open the PR, **never merges it**. Postcondition
+  read-back confirms the PR is actually `open` before returning `ok:true`. Smaller blast radius
+  than the other publishers by design: proposes, doesn't ship.
+- `approve.ts`: calls `openHardeningPR` alongside Notion/Linear/Slack, same `withRetry` treatment,
+  same graceful-degradation-into-`needsEscalation` behavior — but skipped entirely (not a
+  failure) when no proposal was drafted. 8 new tests (4 for the publisher, 4 for the approve-flow
+  integration incl. "skips cleanly when absent" and "failure doesn't block the other publishers")
+  — 70 tests total, all passing, clean typecheck.
+
+**Live-verified**: `proposeHardening` against the real INC-142 root cause produced a genuinely
+correct, runnable pytest test (`monkeypatch`-based, asserts `PolicyFetchError` is raised on a
+404 instead of silently falling back to empty) — then `openHardeningPR` opened a **real PR
+(#3)** on `brightcart-support-agent-`, unmerged, awaiting human review.
+
+**Net effect on the demo pitch**: the agent no longer just tells you what to fix — it writes
+the actual regression test and puts it in front of a human as a real PR. Directly answers "takes
+action" with the strongest possible version of that criterion: proposed code, not prose.
+
+## Verification footer ✅ 2026-09-14 — first of the 4 requested add-ons
+
+Self-referential trust: a tally of checks already performed, computed from data the pipeline
+already produces (`citationChecks` + evidence quarantine flags) — not a new claim the report
+makes about itself.
+
+- `schemas.ts`: `VerificationStatsSchema` (totalClaimsChecked, claimsVerified, claimsCut,
+  evidenceQuarantined), added as a required field on `OrchestrationResult`.
+- `orchestrator.ts`: computes it once, alongside the verdict.
+- `publish/notion.ts`: `verificationFooterText()` + a Notion **callout block placed FIRST** on
+  the page (before Severity) — green ✅ if nothing was cut/quarantined, yellow ⚠️ otherwise.
+  Named "footer" conversationally but placed first deliberately — a self-check reads better as
+  the first thing seen than buried at the bottom.
+- `publish/slack-post.ts`: same one-line summary appended to the Slack tl;dr as a blockquote.
+- `approve.ts`: threads `stored.verificationStats` through to both publish calls.
+- 11 new/updated tests across notion.test.ts, slack-post.test.ts, approve.test.ts — **73 tests
+  total**, clean typecheck.
+- **Live-verified**: real Notion page + real Slack message both published with the real footer
+  text, both postcondition-confirmed.
+
+## Eval scorecard ✅ 2026-09-14 — #2 of 4
+
+Ran `npm run eval` for real against the INC-142 fixture (real Groq reasoning, not mocked):
+
+```
+timelineRecall 100% · citationCoverage 100% · hallucinationRate 0%
+redHerringAvoided ✓ · injectionQuarantined ✓ · rootCauseOk ✗
+```
+
+5/6 green — the harness itself needed zero code changes, it just worked once pointed at a real
+run. **Reporting the one fail honestly rather than hiding it**: `rootCauseOk` checks for exact
+substrings ("empty policy context", "silent fallback") in the ground truth, but the live LLM
+naturally paraphrases the same meaning in different words ("returned no policy data" instead of
+"empty policy context"). This is ground-truth-matching brittleness, not a reasoning defect — the
+underlying root cause is in fact correct (confirmed across every full-pipeline run so far). Real
+fix would be semantic-similarity scoring instead of exact substrings; noted, not fixed tonight
+given time — **do not claim "100% eval pass rate" anywhere in the pitch**, claim what's true:
+5/6 automated checks pass, and the root cause has been manually verified correct on every run.
+
+## Lemma as a 6th evidence source ✅ 2026-09-14 — #3 of 4
+
+`src/evidence/lemma.ts`, matching the established fetcher pattern exactly. Verified the real
+`GET /issues` response shape via direct curl before writing any code — field is `name`, not the
+guessed `title`. Uses `expanded=true` to bypass the frequency cutoff (per the live-tested finding
+in this same file: a single-occurrence issue can be hidden from the default list). 8 new tests
+(mocked), 79 total, clean typecheck. **Live-verified**: real call against the real project
+returned 1 real issue, correctly parsed.
+
+**Known content-relevance gap, not a code bug**: the only real issue in this Lemma project right
+now is "audit report not provided" — the wrong/hallucinated finding discovered during the
+earlier live-testing session (see the "Live-tested findings" section above), unrelated to the
+INC-142 refund-policy story. The fetcher is correct and proven; using its current real output as
+INC-142 evidence would inject an off-topic citation into the report. Before using this in the
+actual demo: either dismiss that issue and seed a real, on-topic one (re-trigger a hallucination
+trace matching the refund narrative — though detection firing reliably was never guaranteed per
+earlier findings), or simply don't force Lemma evidence into this specific incident's narrative
+and treat it as validated infrastructure for a different/future incident instead.
+
+## Arga Labs investigation + README ✅ 2026-09-14 — #4 of 4, upgraded from a guess to real research
+
+User asked directly: does Arga provide features we already have, and can we actually use them
+(not just cite them)? Investigated properly rather than assuming — connected their MCP server to
+config (`claude mcp add ... https://api.argalabs.com/mcp`, requires a session restart to
+activate, not done — would've interrupted the build), then fetched their real docs index
+(`docs.argalabs.com/llms.txt`) to get the actual API surface instead.
+
+**Honest finding: no technical overlap.** Arga's full API — twin provisioning (list/provision/
+status/extend/teardown), scenarios (seed data for those twins), browser Test Runs against a
+reachable URL, MCP tools exposing the same to a coding agent — is entirely about **pre-production
+testing with simulated services**. This agent's job is the opposite: investigating **real**
+incidents with **real** evidence after the fact. Recommended against forcing an integration —
+it would be hollow and risky under judge scrutiny ("how do you actually use it?" → "we don't").
+
+**What got built instead**: the project's first `README.md`, using this real research as a
+stronger pitch than the originally-planned vague philosophical line. States plainly that we
+evaluated direct integration and found no natural fit, and that the genuine alignment is
+architectural — both projects treat "verifiable evidence before an agent acts" as non-negotiable,
+just enforced at different points (Arga: before code ships; this agent: before a conclusion is
+published). Also documents the project structure and run commands for the first time.
+
+**Housekeeping**: `ARGA_API_KEY` saved to `.env` (gitignored) in case a live integration becomes
+worth revisiting later. The `arga-context` MCP server is registered in Claude Code's local config
+but inactive this session (needs a restart) — harmless to leave, or remove with
+`claude mcp remove arga-context` if it should be cleaned up.
+
+**Correction after session restart, 2026-09-14 (late)**: with the MCP tools actually loaded, the
+real tool set is broader than the public REST docs suggested — `search_sentry`, `search_slack`,
+`search_github`, `investigate_bug` look like genuine evidence-search tools, not just twin/test
+infrastructure. Worth knowing this exists. **Did not pursue further**: exercising these tools
+needs (1) the auth header reconfigured (done) plus another session restart to take effect, and
+(2) Arga's own OAuth connections to Sentry/Slack/GitHub set up separately on their dashboard —
+`list_connected_sources` would very likely come back empty without that. Given fully
+live-verified fetchers for all three already exist in this project, the cost (restart + new OAuth
+setup) isn't justified this close to the deadline for something that would end up redundant.
+Revisit only if there's real time to spare.
+
+**All 4 requested features now complete**: verification footer, eval scorecard, Lemma evidence
+source, and Arga investigation/README — each live-verified or, for Arga, honestly resolved as
+"correctly not integrated." 79 tests, clean typecheck throughout.
+
+- [x] Approve/publish orchestration wired ✅ 2026-09-14 — `src/approve.ts` + `src/approve-cli.ts`.
+      `approveAndPublish(incidentId)` takes **only an id** (the exact fix for VoyageBlack's
+      trust-the-client-draft bug — the draft is always loaded from the server-side store, never
+      accepted from a caller); refuses to publish if the stored verdict isn't `approved` or has
+      `injectionDetected`; calls all three publishers with bounded retries (3 attempts, backoff)
+      per target; one target's total failure does not block the others (graceful degradation,
+      same principle as evidence collection, now applied to publishing).
+      **Real bug caught before it ever ran live**: `withRetry` only handled a returned
+      `{ok:false}` — but every publisher *throws* on missing credentials (matching the evidence
+      fetchers' convention). An uncaught throw would have aborted the whole approve call instead
+      of degrading gracefully, silently defeating the "one target's failure doesn't block the
+      others" design. Caught by reasoning through the live-test scenario before running it, not
+      discovered live. Fixed: `withRetry` now catches thrown errors and treats them identically
+      to a returned failure. Added a test for exactly this case. 9 tests (62 total, all passing;
+      retry tests use real timers/delays, ~10s for the suite — acceptable for now).
+      **Live-verified end to end**: seeded an approved draft directly into the store and called
+      the real function — Notion and Linear both genuinely failed (no creds yet), retried 3x each,
+      degraded gracefully; **Slack succeeded independently** (real message, real link) without
+      being blocked by the other two failing. `published:false`, `needsEscalation:true` — the
+      correct honest signal. This is the full resilience design proven live, not just in mocks.
+      Known limitation (documented in approve-cli.ts): the in-memory store doesn't survive across
+      separate CLI process invocations — `postmortem` then `approve` as two separate `npm run`
+      calls won't share state. Fine for a single long-running process (e.g. an HTTP server, which
+      the demo likely needs anyway); would need a real store (file/Redis/DB) for true separate
+      CLI invocations. Not fixed yet — flagged for build-day if time allows.
+
 ### Cheap high-leverage adds
 - **Verification footer** on every report: "14/14 claims verified · 2 strings quarantined ·
   3 unsupported claims cut" + run duration/cost. ~15 min; self-referential trust.
@@ -263,7 +537,14 @@ file-by-file spec ready to type from).
       observed live — we have no real error events in this project yet. Close this by sending one
       real test error before Sunday (Sentry SDK `captureException` or a raw event POST to the
       project's DSN ingest endpoint) and re-running the fetcher against it.
-- [ ] Sentry project with a crashing sample app; seed realistic error events
+- [x] Real Sentry error seeded ✅ 2026-09-14: got the project DSN, POSTed a real event directly to
+      Sentry's ingest API (`/api/{project_id}/store/`, `X-Sentry-Auth` header parsed from the DSN)
+      — a **warning-level** message event (not an exception), matching the actual narrative: the
+      bug is a silently-caught 404, never an unhandled crash. `HTTP 200`, real event id returned.
+      **Live-verified our own fetcher against it**: `fetchSentryEvidence` correctly returned the
+      real issue — right message, right culprit (`services/policy_client.py in fetch_policy`),
+      right warning level. **This closes the last gap — all 6 systems (Sentry, Slack, GitHub,
+      Notion, Linear, Lemma) are now proven against real accounts with real data, not just code.**
 - [x] Slack evidence fetcher implemented ✅ 2026-09-11: `src/evidence/slack.ts` — real
       `conversations.history` + `users.info` calls (Bearer bot token). Handles two real Slack-specific
       quirks the other two sources don't have: (1) Slack's Web API returns **HTTP 200 even on most
@@ -283,9 +564,22 @@ file-by-file spec ready to type from).
       confirmations). Non-empty *conversational* parsing (multi-user, the injection plant) is
       still only mock-verified — closes once the real INC-142 conversation is seeded into this
       channel.
-- [ ] Slack workspace with #inc-demo channel + scripted incident conversation (channel now exists
-      as `#inc-142-demo` / `C0C1B8FCELB`, bot invited — still needs the actual scripted messages
-      from notes/08 posted into it)
+- [x] Slack conversation seeded + a real bug found and fixed via live testing ✅ 2026-09-14:
+      posted all 12 scripted INC-142 messages into `#inc-142-demo` via `chat.postMessage` with
+      per-message `username`/`icon_emoji` overrides (bot scoped to `chat:write` +
+      `chat:write.customize`), simulating maya/dev-raj/priya. PR references updated to the real
+      seeded PR numbers (#1, #2) instead of the fictional #482/#487; the Lemma-issue line softened
+      to avoid asserting a fake issue ID.
+      **Real bug caught by live-testing our own fetcher against this data**: bot-posted messages
+      carry `subtype: "bot_message"` and NO `user` field — only `username` (the override) +
+      `bot_id`. Our filter was a blanket `!subtype`, which silently dropped **all 12 messages**.
+      Fixed: subtype filtering now uses an explicit system-subtype exclusion list
+      (`channel_join` etc.) instead of "any subtype", and label resolution now prefers
+      `msg.username` before falling back to `users.info`. Added 2 new tests for this exact
+      scenario (37 tests total, all passing). Re-ran live: **12/12 messages correctly returned**,
+      correctly attributed per person, correctly ordered, and **SLK-107 (the injection plant) is
+      the one message flagged QUARANTINED, exactly as designed** — full pipeline validated
+      end-to-end on 100% real data.
 - [x] GitHub evidence fetcher implemented + live-verified ✅ 2026-09-11: `src/evidence/github.ts` —
       two real calls (`GET /repos/{o}/{r}/pulls`, `GET /repos/{o}/{r}/deployments`), Bearer auth +
       `X-GitHub-Api-Version` header, client-side window filtering, artifactIds `GH-PR-{number}` /
@@ -296,7 +590,17 @@ file-by-file spec ready to type from).
       both real endpoints returned 200 + correctly parsed empty arrays (repo is new/empty). Same
       residual gap as Sentry: non-empty response shape not yet observed live — close by seeding
       real PRs/deployments (see next checklist item) and re-running.
-- [ ] GitHub repo with commit history that "fixes" the seeded incident
+- [x] GitHub repo seeded + fetcher fully live-verified on non-empty data ✅ 2026-09-13:
+      wrote a one-time seeding script (write-scoped fine-grained PAT: `Contents`/`Deployments`/
+      `Pull requests` all Read-and-write) that bootstrapped the empty repo, created PR #1
+      ("refactor: migrate policy docs to CMS client" — the bug), merged it, created deployment
+      `v1.0.0-cms-migration`, then PR #2 ("fix: policy slug + fail closed" — the fix), merged it,
+      created deployment `v1.0.1-policy-fix`. Ran `fetchGitHubEvidence` against the real result:
+      **4/4 items correctly returned** (`GH-PR-1`, `GH-PR-2`, `GH-DEP-...`×2), correct titles,
+      correct author, correctly ordered timestamps matching the narrative (PR1 merge → deploy1 →
+      PR2 merge → deploy2). Non-empty-response gap from earlier is now fully closed for GitHub.
+      Timestamps are real 2026-09-13 (today), not the fictional 2026-09-08 — relative order/pacing
+      preserved, absolute dates adapted (expected, see notes above).
 - [ ] Notion workspace + integration token; Linear workspace + API key
 - [ ] Eval fixtures: 8–10 seeded incidents w/ ground-truth JSON (timeline, root cause, action items)
 - [ ] Demo script rehearsed; recording plan for ~4 AM IST fatigue
