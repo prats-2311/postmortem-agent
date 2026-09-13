@@ -13,6 +13,7 @@ Compiled 2026-09-10 from docs.uselemma.ai (33 pages), uselemma.ai, and their blo
 | [06-shipsafe-repo-ideas.md](06-shipsafe-repo-ideas.md) | Ideas mined from shipsafe-ai/shipsafe-shared — VoyageBlack (prior postmortem agent) pipeline, Critic/approval-gate/injection-isolation patterns, demo-craft playbook |
 | [07-voyageblack-critic-analysis.md](07-voyageblack-critic-analysis.md) | Deep dive on VoyageBlack's Critic code — two-layer design, fail-closed paths, two real bugs found (fail-open verdict defaults, trusting client drafts), TypeScript port plan |
 | [08-demo-incident-fixtures.md](08-demo-incident-fixtures.md) | Seeded demo incident "INC-142: The Phantom Refund Policy" — full cross-source fixtures (Sentry/Slack/GitHub/Lemma), injection plant, red herring, eval ground truth, prior postmortem, scenario B |
+| [09-demo-video-script.md](09-demo-video-script.md) | Timestamped ≤2-minute submission video script — tab order, exact narration, real artifact links (Notion/Linear/Slack/PR), what to cut if short on time |
 
 Raw doc mirrors live in the session scratchpad (`lemma-docs/`); re-fetch anytime from
 `https://docs.uselemma.ai/llms.txt` (each page is served as raw `.md`).
