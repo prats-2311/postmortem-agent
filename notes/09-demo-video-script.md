@@ -13,10 +13,10 @@ approve -- INC-142-CLEAN` run on 2026-09-14, not staged.
    take on a live call.
 2. **Open every tab in this order before recording** (alt-tab during the take, don't search live):
    1. Terminal, font large, at the repo root
-   2. Notion page: https://app.notion.com/p/Incident-INC-142-CLEAN-The-deployment-of-PR-482-renamed-the-CMS-policy-slug-to-re-3dae5ef6beba81f9aab1e6a7ad0afa10
-   3. Linear ticket list (any one, e.g. https://linear.app/prats2311/issue/RAN-12/address-no-alertingpaging-for-policyfetcherror-warnings-sen-evt-501 ) — or the team's board view showing all 5
-   4. Slack message: https://slack.com/archives/C0C1B8FCELB/p1789331794320649
-   5. GitHub hardening PR diff: https://github.com/prats-2311/brightcart-support-agent-/pull/4
+   2. Notion page: https://app.notion.com/p/Incident-INC-142-CLEAN-A-mismatched-CMS-slug-introduced-by-PR-482-caused-the-polic-3dae5ef6beba8105a8a5e480f0bb936d
+   3. Linear ticket list (any one, e.g. https://linear.app/prats2311/issue/RAN-17/address-lemma-flagged-the-hallucination-issue-lmaiss233-but-no ) — or the team's board view showing all 6 (RAN-17 through RAN-22)
+   4. Slack message: https://slack.com/archives/C0C1B8FCELB/p1789334427695809
+   5. GitHub hardening PR diff: https://github.com/prats-2311/brightcart-support-agent-/pull/5
    6. Your Lemma dashboard tab (already open per your browser — the project this agent traces to)
    7. GitHub repo root: https://github.com/prats-2311/postmortem-agent
 3. In the terminal, have `/tmp/pm-out.log` and `/tmp/approve-out.log` ready to `cat`/scroll if you
