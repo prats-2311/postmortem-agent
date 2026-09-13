@@ -183,4 +183,4 @@ Full research and build log in [`notes/`](notes/).
 
 ## 05 · Demo video
 
-**[TODO: paste the ≤2-minute demo video link here before submitting]**
+[https://youtu.be/7exLg4we3gs](https://youtu.be/7exLg4we3gs)
