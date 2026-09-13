@@ -92,7 +92,7 @@ export function buildNotionBlocks(draft: PostmortemDraft, stats: VerificationSta
   if (draft.claims.length > 0) {
     blocks.push(heading2("Findings"));
     for (const claim of draft.claims) {
-      blocks.push(bulletedItem(`${claim.text} (source: ${claim.citedArtifactId})`));
+      blocks.push(bulletedItem(`${claim.text} (source: ${claim.citedArtifactIds.join(", ")})`));
     }
   }
 

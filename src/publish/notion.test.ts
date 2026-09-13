@@ -15,7 +15,7 @@ const SAMPLE_DRAFT: PostmortemDraft = {
     confidence: 0.9,
     citedArtifactIds: ["GH-PR-1"],
   },
-  claims: [{ text: "The agent fabricated a 30-day refund policy.", citedArtifactId: "SLK-101" }],
+  claims: [{ text: "The agent fabricated a 30-day refund policy.", citedArtifactIds: ["SLK-101"] }],
   actionItems: ["Add alert rule on PolicyFetchError", "Add regression eval for policy citations"],
   metrics: { machineSignalLagMinutes: 45, humanDetectionLagMinutes: 126 },
   status: "approved",

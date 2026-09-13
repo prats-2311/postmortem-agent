@@ -69,7 +69,7 @@ export const RootCauseLLMSchema = z.object({
 
 export const ClaimSchema = z.object({
   text: z.string().min(1),
-  citedArtifactId: z.string().min(1),
+  citedArtifactIds: z.array(z.string().min(1)).min(1),
 });
 export type Claim = z.infer<typeof ClaimSchema>;
 

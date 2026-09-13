@@ -25,7 +25,7 @@ export function writeDraft(params: WriteDraftParams): PostmortemDraft {
   const claims: Claim[] = [
     {
       text: params.rootCause.primaryCause,
-      citedArtifactId: params.rootCause.citedArtifactIds[0]!,
+      citedArtifactIds: params.rootCause.citedArtifactIds,
     },
   ];
 

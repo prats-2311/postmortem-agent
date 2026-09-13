@@ -23,19 +23,25 @@ export async function verifyClaims(
   const results: CitationCheck[] = [];
 
   for (const claim of claims) {
-    const artifact = evidenceById.get(claim.citedArtifactId);
+    const artifacts: Evidence[] = [];
+    const missing: string[] = [];
+    for (const id of claim.citedArtifactIds) {
+      const artifact = evidenceById.get(id);
+      if (artifact) artifacts.push(artifact);
+      else missing.push(id);
+    }
 
-    if (!artifact) {
+    if (missing.length > 0) {
       results.push({
         claim,
         artifactResolved: false,
         supported: false,
-        reason: `citedArtifactId "${claim.citedArtifactId}" does not exist in the evidence store`,
+        reason: `citedArtifactIds not found in the evidence store: ${missing.join(", ")}`,
       });
       continue;
     }
 
-    const supported = await checkSupport(claim, artifact);
+    const supported = await checkSupport(claim, artifacts);
     results.push({ claim, artifactResolved: true, ...supported });
   }
 
@@ -44,18 +50,20 @@ export async function verifyClaims(
 
 async function checkSupport(
   claim: Claim,
-  artifact: Evidence,
+  artifacts: Evidence[],
 ): Promise<{ supported: boolean; reason: string }> {
+  const evidenceBlock = artifacts
+    .map((a) => `(${a.source}, ${a.artifactId}):\n"${a.sanitized}"`)
+    .join("\n\n");
   const { object } = await generateObject({
     model,
     schema: z.object({ supported: z.boolean(), reason: z.string() }),
     system:
-      "You verify whether a cited piece of evidence actually supports a claim. " +
-      "Be strict: paraphrase drift is fine, contradiction or unrelated content is not.",
-    prompt:
-      `Claim: "${claim.text}"\n\n` +
-      `Cited evidence (${artifact.source}, ${artifact.artifactId}):\n"${artifact.sanitized}"\n\n` +
-      "Does the evidence support the claim?",
+      "You verify whether cited evidence actually supports a claim. The claim may draw on " +
+      "multiple pieces of evidence together — supported if the COMBINATION of all cited " +
+      "evidence backs it. Be strict: paraphrase drift is fine, contradiction or unrelated " +
+      "content is not.",
+    prompt: `Claim: "${claim.text}"\n\nCited evidence:\n${evidenceBlock}\n\nDoes the evidence support the claim?`,
   });
   return object;
 }

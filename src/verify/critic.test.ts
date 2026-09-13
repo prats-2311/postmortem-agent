@@ -19,7 +19,7 @@ function draftWithClaim(text: string): PostmortemDraft {
     title: "test",
     severity: "HIGH",
     timeline: [],
-    claims: [{ text, citedArtifactId: "TEST-1" }],
+    claims: [{ text, citedArtifactIds: ["TEST-1"] }],
     actionItems: [],
     metrics: {},
     status: "draft",
