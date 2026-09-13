@@ -6,11 +6,18 @@ approve -- INC-142-CLEAN` run on 2026-09-14, not staged.
 
 ## Before you hit record
 
-1. **Do NOT re-run the pipeline live on camera.** `INC-142` (the fixture with the planted
-   paraphrased injection) reliably ends blocked; `INC-142-CLEAN` reliably ends approved and
-   published — but an LLM call is still non-deterministic in wording and takes real seconds. Use
-   the pre-generated real output below and the terminal scrollback/log files instead of gambling a
-   take on a live call.
+0. **`git pull` in your recording folder first.** A citation-verifier bug was just fixed
+   (claims were only checking their first cited artifact, so real published postmortems showed a
+   misleading "0/1 claims verified" banner). Pull, then re-run `npm run postmortem --
+   INC-142-CLEAN` and `npm run approve -- INC-142-CLEAN` once *before* recording so the artifacts
+   you show on camera say "1/1 claims verified," not "0/1." Update the tab links below if the
+   Notion/Slack/PR URLs change (they will — each run creates new ones).
+1. **Prefer NOT re-running the pipeline a second time live on camera.** `INC-142` (the fixture
+   with the planted paraphrased injection) reliably ends blocked; `INC-142-CLEAN` reliably ends
+   approved and published — but an LLM call is still non-deterministic in wording and takes real
+   seconds. Use your terminal's own scrollback from the pre-record run above instead of gambling
+   a take on a live call. If you'd rather show it live, that's fine too — just expect a ~10–20s
+   pause while it thinks, and don't cut the recording short waiting on it.
 2. **Open every tab in this order before recording** (alt-tab during the take, don't search live):
    1. Terminal, font large, at the repo root
    2. Notion page: https://app.notion.com/p/Incident-INC-142-CLEAN-A-mismatched-CMS-slug-introduced-by-PR-482-caused-the-polic-3dae5ef6beba8105a8a5e480f0bb936d
@@ -19,9 +26,7 @@ approve -- INC-142-CLEAN` run on 2026-09-14, not staged.
    5. GitHub hardening PR diff: https://github.com/prats-2311/brightcart-support-agent-/pull/5
    6. Your Lemma dashboard tab (already open per your browser — the project this agent traces to)
    7. GitHub repo root: https://github.com/prats-2311/postmortem-agent
-3. In the terminal, have `/tmp/pm-out.log` and `/tmp/approve-out.log` ready to `cat`/scroll if you
-   don't want to wait on a live LLM call — both are real output from the actual run.
-4. Screen record at 1080p (QuickTime → New Screen Recording, mic on). Narrate live or dub after.
+3. Screen record at 1080p (QuickTime → New Screen Recording, mic on). Narrate live or dub after.
 
 ---
 
@@ -55,29 +60,32 @@ camera, not claimed in prose. It also sets up the fail-closed critic segment at 
 "detectors miss things → so we verify mechanically" is the throughline for the whole pitch.
 
 ### 0:32–0:50 — Run the pipeline, live terminal (18s)
-**Screen:** Terminal — either run `npm run postmortem -- INC-142-CLEAN` live and let it play, or
-`cat /tmp/pm-out.log` and scroll through the real saved output at a readable pace.
+**Screen:** Terminal — type and run `npm run postmortem -- INC-142-CLEAN` live, or scroll your
+pre-recorded run's scrollback from step 0 above at a readable pace. Either way, let the command
+and its name stay visible on screen while you talk.
 **Say:**
-> "It sanitizes every piece of evidence for prompt injection before any of it reaches a model,
-> reconstructs the timeline, and reasons about root cause — only over structured fields, never
-> raw evidence text."
+> "This command, `postmortem`, is the analysis stage — it only reads and reasons, it never
+> publishes anything yet. It sanitizes every piece of evidence for prompt injection before any of
+> it reaches a model, reconstructs the timeline, and reasons about root cause — only over
+> structured fields, never raw evidence text. It ends with a draft, not a publish."
 
 ### 0:50–1:05 — The fail-closed catch (15s) — the strongest differentiator, don't cut this
-**Screen:** Terminal — `cat /tmp/pm-out.log` scrolled to the `INC-142` (not -CLEAN) run's verdict
-block (`"injectionDetected": true`, `"blockedContent": [...]`), OR just describe it over the
-Notion/Slack tabs if you'd rather not re-scroll.
+**Screen:** Terminal — same `postmortem` command, but for the OTHER fixture: `npm run postmortem
+-- INC-142` (no `-CLEAN`). Scroll to the verdict block (`"injectionDetected": true,
+"blockedContent": [...]`), or describe it over the Notion/Slack tabs if you'd rather not re-run.
 **Say:**
-> "One of our test incidents has a prompt injection hidden in a log line, worded to slip past a
-> simple keyword filter. It does slip past the first layer — but the LLM Critic reviewing the
-> final draft catches it and refuses to publish. That's the fail-closed design working, not a
-> hypothetical."
+> "Same `postmortem` command, a different incident. This one has a prompt injection hidden in a
+> log line, worded to slip past a simple keyword filter. It does slip past the first layer — but
+> the LLM Critic reviewing the final draft catches it and refuses to approve it. That's the
+> fail-closed design working, not a hypothetical."
 
 ### 1:05–1:15 — Human approval gate (10s)
-**Screen:** Terminal — `cat /tmp/approve-out.log` (or run `npm run approve -- INC-142-CLEAN` live
-if you already ran postmortem live above).
+**Screen:** Terminal — run `npm run approve -- INC-142-CLEAN` (the clean, approved incident from
+0:32), and let its JSON output land on screen.
 **Say:**
-> "On a clean incident, a human approves by reference — just an incident ID, never a
-> client-supplied draft — and only then does it actually publish."
+> "This second command, `approve`, is the only path that actually publishes anything — and it
+> takes just an incident ID, never a draft, so nothing client-supplied can be smuggled through.
+> A human approves by reference, and only then does it write anywhere."
 
 ### 1:15–1:40 — Show the real publishes (25s)
 **Screen:** Quick cuts, ~6s each: Notion page (scroll to citations/verification footer) → Linear
