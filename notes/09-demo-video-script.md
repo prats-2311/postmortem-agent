@@ -34,16 +34,27 @@ approve -- INC-142-CLEAN` run on 2026-09-14, not staged.
 > writing the postmortem by hand takes hours someone doesn't have. This is an AI postmortem
 > agent that does it for you, and mechanically verifies every claim before it publishes anything."
 
-### 0:12–0:30 — Evidence gathering + Lemma as a source (18s)
-**Screen:** Switch to your **Lemma dashboard** tab — show the issue Lemma flagged
-(`support-agent asserts refund terms unsupported by provided context`).
+### 0:12–0:32 — Evidence gathering + Lemma as a source (20s)
+**Screen:** Lemma dashboard → **Traces** → open trace `a8ef09d9-45a3-5af0-ac9b-5ca3687c6aec`
+(support-agent, 11 Sept 2026). Real, live, already on screen — not staged. Point at, in order:
+1. The conversation: user says "my headphones case cracked, box was opened, refund pls";
+   agent replies "Absolutely! Our 30-day full refund policy covers this, no questions asked.
+   Refund initiated."
+2. The `fetch_policy` span — 205ms, shown with a warning/error indicator.
+3. The banner at the top of the trace: **"Analysis found no issues in this trace."**
 **Say:**
-> "Sentry, Slack, and GitHub cover most incidents. But when the incident IS an AI agent
-> misbehaving, Lemma is a sixth evidence source — in this seeded incident, Lemma flagged the
-> hallucination eighty-one minutes before any human noticed."
-**Action:** Point at / highlight the issue timestamp vs. the human Slack report timestamp if visible.
+> "This is a real trace from our own support agent. It's asked about a refund, the policy
+> lookup call comes back flagged — and the agent still confidently answers with a specific
+> refund policy anyway. Lemma's own analysis on this exact trace says no issues found. That's
+> the failure mode this whole project exists to catch: an AI system sounding confident isn't the
+> same as being right — which is why every claim we publish gets mechanically re-verified
+> against the evidence, not just asserted because a model said it."
+**Why this works:** fully real, fully truthful, and it's the single most concrete "wow" moment
+in the video — a live detector visibly missing the exact thing it's built to catch, shown on
+camera, not claimed in prose. It also sets up the fail-closed critic segment at 0:50 perfectly:
+"detectors miss things → so we verify mechanically" is the throughline for the whole pitch.
 
-### 0:30–0:50 — Run the pipeline, live terminal (20s)
+### 0:32–0:50 — Run the pipeline, live terminal (18s)
 **Screen:** Terminal — either run `npm run postmortem -- INC-142-CLEAN` live and let it play, or
 `cat /tmp/pm-out.log` and scroll through the real saved output at a readable pace.
 **Say:**
@@ -88,5 +99,5 @@ tickets (show 2–3 of the 5) → Slack message → GitHub PR diff (the regressi
 ## If you're short on time and must cut something
 
 Cut 1:15–1:40 down to 2 artifacts instead of 4 (Notion + PR are the most visually convincing) —
-do NOT cut 0:50–1:05 (the injection-block segment) or the Lemma segment (0:12–0:30); those are
-the two moments that differentiate this from "an LLM wrapper with a nice README."
+do NOT cut 0:50–1:05 (the injection-block segment) or the Lemma trace segment (0:12–0:32); those
+are the two moments that differentiate this from "an LLM wrapper with a nice README."
